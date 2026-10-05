@@ -1,0 +1,538 @@
+{
+  "generated_by": "npm run spec",
+  "server": {
+    "name": "wc-storefront-reader",
+    "version": "0.4.0"
+  },
+  "transport": "stdio",
+  "instructions": "Read-only access to a single WooCommerce storefront: its orders, the notes on those orders, and its product catalogue with stock. You cannot change anything here. There is no tool to refund, cancel, edit or restock -- if the merchant needs that done, say so and let a human do it. Buyer emails and phone numbers arrive partly veiled, and street addresses are withheld; city and postcode are not. That is enough to confirm an identity, not to contact anyone. The store belongs to a merchant and may be on shared hosting. Filter narrowly, page small, and prefer a direct lookup over a sweep. When a tool returns a `failed` code, read `next_step` and follow it rather than retrying the same call.",
+  "tool_count": 10,
+  "tools": [
+    {
+      "name": "catalog_list",
+      "title": "List products",
+      "description": "Browse published products with price, stock state and quantity on hand. Narrow by stock state, category or product type.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "description": "Keep only products with this stock state.",
+            "type": "string",
+            "enum": [
+              "instock",
+              "outofstock",
+              "onbackorder"
+            ]
+          },
+          "section_id": {
+            "description": "Keep only products in this category.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "description": "Product type.",
+            "type": "string",
+            "enum": [
+              "simple",
+              "variable",
+              "grouped",
+              "external"
+            ]
+          },
+          "sort_by": {
+            "default": "date",
+            "type": "string",
+            "enum": [
+              "date",
+              "title",
+              "price",
+              "popularity"
+            ]
+          },
+          "ascending": {
+            "default": false,
+            "type": "boolean"
+          },
+          "page": {
+            "default": 1,
+            "description": "1-based page number.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "per_page": {
+            "default": 10,
+            "description": "Rows per page, at most 50. Ask for the fewest you can use.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "catalog_search",
+      "title": "Search products",
+      "description": "Find products by words in the name or description, or by exact SKU. At least one of text or sku is required. SKU lookup is exact, not fuzzy -- if it finds nothing, try the same string as text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "description": "Words from the product's name or description.",
+            "type": "string",
+            "minLength": 2
+          },
+          "sku": {
+            "description": "An exact SKU; comma-separate to look up several.",
+            "type": "string",
+            "minLength": 1
+          },
+          "availability": {
+            "description": "Keep only products with this stock state.",
+            "type": "string",
+            "enum": [
+              "instock",
+              "outofstock",
+              "onbackorder"
+            ]
+          },
+          "section_id": {
+            "description": "Keep only products in this category.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "description": "Product type.",
+            "type": "string",
+            "enum": [
+              "simple",
+              "variable",
+              "grouped",
+              "external"
+            ]
+          },
+          "sort_by": {
+            "default": "date",
+            "type": "string",
+            "enum": [
+              "date",
+              "title",
+              "price",
+              "popularity"
+            ]
+          },
+          "ascending": {
+            "default": false,
+            "type": "boolean"
+          },
+          "page": {
+            "default": 1,
+            "description": "1-based page number.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "per_page": {
+            "default": 10,
+            "description": "Rows per page, at most 50. Ask for the fewest you can use.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "order_by_gateway_ref",
+      "title": "Find order by gateway reference",
+      "description": "Given a payment reference from the gateway -- a Razorpay payment id (pay_...) or order id (order_...), or any gateway's equivalent -- find the order it belongs to. This is the tool for \"I was charged but my order never confirmed\". WooCommerce does not index these, so it sweeps recent orders and can be slow: keep window_days tight. matched=false with conclusive=true means no order in that window carries the reference; conclusive=false means the sweep ran out of pages and proves nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "description": "The gateway's payment or order reference."
+          },
+          "window_days": {
+            "default": 30,
+            "description": "How far back to sweep, by last-modified date.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90
+          },
+          "max_pages": {
+            "default": 5,
+            "description": "Ceiling on pages of 100 orders to read. Raise only if a sweep came back inconclusive.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "order_detail",
+      "title": "Order detail",
+      "description": "One order in full: every line with its SKU, the totals broken out, coupons used, delivery method, refunds, the buyer's own note, and each timestamp the order carries.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "string",
+                "pattern": "^#?\\d+$"
+              }
+            ],
+            "description": "The order's internal ID, as a number or as \"#1042\"."
+          }
+        },
+        "required": [
+          "order"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "order_timeline",
+      "title": "Order timeline",
+      "description": "The order's notes in the order they happened: state changes, whatever the payment gateway reported (captured, failed, webhook received), and anything staff wrote. This is where the answer to \"why is this order still pending?\" usually is.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "string",
+                "pattern": "^#?\\d+$"
+              }
+            ],
+            "description": "The order's internal ID, as a number or as \"#1042\"."
+          }
+        },
+        "required": [
+          "order"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "orders_list",
+      "title": "List orders",
+      "description": "Browse the store's orders, newest first, narrowed by state, date range, account or product. Each row is a brief: state, amount, gateway and its reference, plus the buyer's name and veiled contact. Call order_detail when you need line items, addresses, refunds or totals.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "description": "Keep only orders in these states. Omit to span every state.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "processing",
+                "on-hold",
+                "completed",
+                "cancelled",
+                "refunded",
+                "failed",
+                "checkout-draft"
+              ]
+            }
+          },
+          "from": {
+            "description": "Placed on or after this date, in the store's timezone.",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?)?$"
+          },
+          "to": {
+            "description": "Placed on or before this date, in the store's timezone.",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?)?$"
+          },
+          "account_id": {
+            "description": "Keep only orders belonging to this registered account.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "product_id": {
+            "description": "Keep only orders containing this product.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newest_first": {
+            "default": true,
+            "description": "Sort by date placed; false for oldest first.",
+            "type": "boolean"
+          },
+          "page": {
+            "default": 1,
+            "description": "1-based page number.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "per_page": {
+            "default": 10,
+            "description": "Rows per page, at most 50. Ask for the fewest you can use.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "orders_search",
+      "title": "Search orders",
+      "description": "Free-text search over orders: buyer name, email, phone, address, or a product's name. Reach for this when someone contacts support and all you have is who they are. It will NOT find gateway references such as pay_... -- use order_by_gateway_ref for those.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 2,
+            "description": "What to look for, e.g. an email address or a surname."
+          },
+          "state": {
+            "description": "Keep only orders in these states. Omit to span every state.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "processing",
+                "on-hold",
+                "completed",
+                "cancelled",
+                "refunded",
+                "failed",
+                "checkout-draft"
+              ]
+            }
+          },
+          "from": {
+            "description": "Placed on or after this date, in the store's timezone.",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?)?$"
+          },
+          "to": {
+            "description": "Placed on or before this date, in the store's timezone.",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?)?$"
+          },
+          "account_id": {
+            "description": "Keep only orders belonging to this registered account.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "product_id": {
+            "description": "Keep only orders containing this product.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newest_first": {
+            "default": true,
+            "description": "Sort by date placed; false for oldest first.",
+            "type": "boolean"
+          },
+          "page": {
+            "default": 1,
+            "description": "1-based page number.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "per_page": {
+            "default": 10,
+            "description": "Rows per page, at most 50. Ask for the fewest you can use.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "product_detail",
+      "title": "Product detail",
+      "description": "One product in full: list and offer price, its reorder level, backorder policy, and -- for a variable product -- every variant with its options, price and stock. Use this to answer \"is it in medium?\".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The product's ID."
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "stock_alerts",
+      "title": "Stock alerts",
+      "description": "Everything sold out or at/below its reorder level, most urgent first, each tagged sold_out or low. Levels come from each product, then the store's own setting, unless you pass reorder_at to override both. This sweeps the catalogue, so check conclusive before reporting it as the whole picture.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reorder_at": {
+            "description": "Override: treat anything at or below this quantity as low.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "include_sold_out": {
+            "default": true,
+            "description": "Include items already at zero.",
+            "type": "boolean"
+          },
+          "max_pages": {
+            "default": 10,
+            "description": "Ceiling on pages of 100 products to read.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "store_link_check",
+      "title": "Check the store link",
+      "description": "Confirm the connector can actually reach this store, and report how it is configured: the store URL, how requests are signed, round-trip time, how many orders the key can see, whether contact details are veiled, and the pacing budget. Use this first when another tool fails in a way that smells like setup rather than data.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}
